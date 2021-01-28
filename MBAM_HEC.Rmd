@@ -1,0 +1,130 @@
+---
+title: "MBAM Data CHallenge"
+author: "DatArt"
+date: "28 janvier 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(lubridate)
+library(MASS)
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(reshape2)
+library(grid)
+library(gridExtra)
+
+
+if (Sys.getenv("USERNAME") =="David"){
+  setwd("C:/Users/David/OneDrive/1_Ecole/HEC/Msc/HEC DATA")
+}else{
+  
+  
+}
+
+```
+
+
+
+
+```{r import_data, include=FALSE}
+
+
+complete_df = read.csv("./MBAM_data/MBAM_complet.csv",header = TRUE,encoding = "UTF-8")
+complete_df$date = date(complete_df$date)
+dict_comlete <- read_excel("./Dictionnaire_MBAM.xlsx",sheet = "Dictionnaire MBAM_complet",col_names = FALSE)
+
+
+
+complete_df$campagnes[complete_df$campagnes == "EblastPromoParis-Le Saviez-vous?#1"] <- "EblastPromoParis_LeSaviez-vous?#1"
+complete_df$campagnes [complete_df$campagnes == "EblastPromoParis-LeSaviez-vous?#1"]<- "EblastPromoParis_LeSaviez-vous?#1"
+complete_df$campagnes[complete_df$campagnes == "EblastPromoParis-LeSaviez-vous?#2"] <- "EblastPromoParis_LeSaviez-vous?#2"
+complete_df$campagnes[complete_df$campagnes == "EblastPromoParis-LeSaviez-vous?#3"] <- "EblastPromoParis_LeSaviez-vous?#3"
+complete_df$campagnes[complete_df$campagnes == "EblastPromoParis-LeSaviez-vous?#4"] <- "EblastPromoParis_LeSaviez-vous?#4"
+complete_df$campagnes[complete_df$campagnes == "EblastPromoParisOK"] <- "EblastPromoParis"
+
+
+
+```
+
+
+```{r}
+n_id <-  length(unique(complete_df$num_dossier_mbam_coded))
+
+data_date_delivered= complete_df %>% 
+        select(c(date,num_dossier_mbam_coded,statut,langue, delivered, open, clicked, not_open,open_but_didnt_click,campagnes)) %>% filter(delivered ==1) %>%
+                                            group_by(date) %>% 
+                                            summarise(count_date= n(),
+                                                      Open= sum(open),
+                                                      Clicked= sum(clicked),
+                                                      Not_open= sum(not_open),
+                                                      Open_not_click= sum(open_but_didnt_click)) %>% mutate(Pct_open = Open/count_date)
+
+data_open_or_not = melt(data_date_delivered %>% select(date, Open, Not_open,Pct_open) ,id.vars = "date")
+data_open_or_not<- data_open_or_not %>% mutate(is_pct=0) %>% mutate(is_pct= case_when(variable== "Pct_open"~ "1",
+                                                         TRUE ~ as.character(is_pct)))
+
+color_table_1= tibble(open_or_not= c("Open","Not_open","Pct_open"),
+                    color=c("green","red","green"))
+
+g1 <- ggplot(data= data_open_or_not)+
+  geom_col(mapping = aes(x=date,y=value,fill=variable),position="stack") +
+  scale_fill_manual(values=color_table_1$color)+
+  ggtitle("Ouvert ou non ouvert mais recu")+ylab("Nombre de courriel envoyés")+ xlab("Date")+
+  theme(legend.position = "None")+facet_grid(is_pct~.,scales="free_y")
+
+
+grid.arrange(g1,g2)
+
+
+###
+data_date_delivered$Open_clicked_pct = data_date_delivered$Clicked / data_date_delivered$Open
+
+
+ggplot(data= data_date_delivered)+
+  geom_col(mapping = aes(x=date,y=Open_clicked_pct),fill="green") +
+  ylab("Clicked in open mail %")+ xlab("Date")+ ggtitle("Click after opening")
+
+######
+
+data_date_delivered_campagnes= complete_df %>% 
+        select(c(date,num_dossier_mbam_coded,statut,langue, delivered, open, clicked, not_open,open_but_didnt_click,campagnes)) %>% filter(delivered ==1) %>%
+                                            group_by(date,campagnes) %>% 
+                                            summarise(count_date= n(),
+                                                      Open= sum(open),
+                                                      Clicked= sum(clicked),
+                                                      Not_open= sum(not_open),
+                                                      Open_not_click= sum(open_but_didnt_click)) 
+
+data_open_or_not_with_campaign = melt(data_date_delivered_campagnes %>% select(date, Open, Not_open,campagnes) ,id.vars = c("date","campagnes"))
+
+
+count_campaigne <- data_open_or_not_with_campaign %>% filter(variable=="Open") %>% group_by(campagnes) %>% summarise(count_campagnes= n())
+data_open_or_not_with_campaign <- data_open_or_not_with_campaign %>% merge(count_campaigne)
+
+
+ggplot(data= data_open_or_not_with_campaign %>% filter(count_campagnes>1))+
+  geom_col(mapping = aes(x=date,y=value,fill=variable),position="stack") +
+  scale_fill_manual(values=color_table_1$color)+
+  ggtitle("Ouvert ou non ouvert mais recu")+ylab("Nombre de communication envoyés")+ xlab("Date")+
+  theme(legend.position = "None")+facet_wrap(campagnes~.,scales="free",ncol = 4)+
+  theme(axis.text.x = element_text(angle=45))
+
+
+```
+
+Analyse des data
+Les probleme de courriels
+```{r }
+#Les hardbounce
+ggplot(data=complete_df %>% filter(hardbounce ==1 | softbounce ==1))
+
+complete_df %>% filter(hardbounce ==1 | softbounce ==1) %>% group_by(num_dossier_mbam_coded) %>% summarise()
+
+
+```
+
+length(unique(complete_df$num_dossier_mbam_coded))
