@@ -16,6 +16,7 @@ library(readxl)
 library(reshape2)
 library(grid)
 library(gridExtra)
+library(data.table)
 
 
 if (Sys.getenv("USERNAME") =="David"){
@@ -54,7 +55,7 @@ complete_df$campagnes[complete_df$campagnes == "EblastPromoParisOK"] <- "EblastP
 ```{r}
 n_id <-  length(unique(complete_df$num_dossier_mbam_coded))
 
-data_date_delivered= complete_df %>% 
+data_date_delivered= complete_df  %>%
         select(c(date,num_dossier_mbam_coded,statut,langue, delivered, open, clicked, not_open,open_but_didnt_click,campagnes)) %>% filter(delivered ==1) %>%
                                             group_by(date) %>% 
                                             summarise(count_date= n(),
@@ -64,20 +65,28 @@ data_date_delivered= complete_df %>%
                                                       Open_not_click= sum(open_but_didnt_click)) %>% mutate(Pct_open = Open/count_date)
 
 data_open_or_not = melt(data_date_delivered %>% select(date, Open, Not_open,Pct_open) ,id.vars = "date")
-data_open_or_not<- data_open_or_not %>% mutate(is_pct=0) %>% mutate(is_pct= case_when(variable== "Pct_open"~ "1",
-                                                         TRUE ~ as.character(is_pct)))
 
-color_table_1= tibble(open_or_not= c("Open","Not_open","Pct_open"),
-                    color=c("green","red","green"))
 
-g1 <- ggplot(data= data_open_or_not)+
+color_table_1= tibble(open_or_not= c("Open","Not_open"),
+                    color=c("green","red"))
+
+g1 <- ggplot(data= data_open_or_not %>% filter(variable!="Pct_open"))+
   geom_col(mapping = aes(x=date,y=value,fill=variable),position="stack") +
   scale_fill_manual(values=color_table_1$color)+
-  ggtitle("Ouvert ou non ouvert mais recu")+ylab("Nombre de courriel envoyés")+ xlab("Date")+
-  theme(legend.position = "None")+facet_grid(is_pct~.,scales="free_y")
+  ggtitle("Les courriels sont-ils ouvert?")+ylab("# courriel envoyés")+ xlab("Date")+
+  theme(legend.position = "right",legend.title = element_blank(),
+        axis.title.x = element_blank(), axis.text.x = element_blank())
+
+g2 <- ggplot(data= data_open_or_not %>% filter(variable=="Pct_open"))+
+  geom_col(mapping = aes(x=date,y=value,fill=variable),position="stack") +
+  scale_fill_manual(values=color_table_1$color)+
+  ylab(" % courriel ouvert")+ xlab("Date")+
+  theme(legend.position = "right",legend.title = element_blank())
 
 
-grid.arrange(g1,g2)
+g3 <- grid.arrange(g1,g2,ncol=1)
+
+
 
 
 ###
@@ -86,7 +95,7 @@ data_date_delivered$Open_clicked_pct = data_date_delivered$Clicked / data_date_d
 
 ggplot(data= data_date_delivered)+
   geom_col(mapping = aes(x=date,y=Open_clicked_pct),fill="green") +
-  ylab("Clicked in open mail %")+ xlab("Date")+ ggtitle("Click after opening")
+  ylab("% des courriels ouvert")+ xlab("Date")+ ggtitle("Ça clique ou Ça ne clique pas?")
 
 ######
 
@@ -105,14 +114,24 @@ data_open_or_not_with_campaign = melt(data_date_delivered_campagnes %>% select(d
 count_campaigne <- data_open_or_not_with_campaign %>% filter(variable=="Open") %>% group_by(campagnes) %>% summarise(count_campagnes= n())
 data_open_or_not_with_campaign <- data_open_or_not_with_campaign %>% merge(count_campaigne)
 
+data_open_or_not_with_campaign$campagnes <- gsub("EblastPromoParis_","",data_open_or_not_with_campaign$campagnes)
+
 
 ggplot(data= data_open_or_not_with_campaign %>% filter(count_campagnes>1))+
   geom_col(mapping = aes(x=date,y=value,fill=variable),position="stack") +
   scale_fill_manual(values=color_table_1$color)+
-  ggtitle("Ouvert ou non ouvert mais recu")+ylab("Nombre de communication envoyés")+ xlab("Date")+
-  theme(legend.position = "None")+facet_wrap(campagnes~.,scales="free",ncol = 4)+
-  theme(axis.text.x = element_text(angle=45))
+  ggtitle("Ouvert ou non par campagne")+ylab("Nombre de communication envoyés")+ xlab("Date")+
+  theme(legend.position = "None")+facet_wrap(campagnes~.,scales="free",ncol = 4,labeller = label_wrap_gen(width=20))+
+  theme(axis.text.x = element_text(angle=45))+
+  theme(strip.text.x = element_text(size = 10, colour = "black"))
 
+
+ggplot(data= data_open_or_not_with_campaign %>% filter(count_campagnes==1),group=color)+
+  geom_col(mapping = aes(x=date,y=value,fill=variable,color=campagnes)) +
+  scale_fill_manual(values=color_table_1$color)+
+  ggtitle("Ouvert ou non par campagne")+ylab("Nombre de communication envoyés")+ xlab("Date")+
+  theme(axis.text.x = element_text(angle=45),axis.title.x = element_blank())+
+  theme(strip.text.x = element_text(size = 7, colour = "black")) 
 
 ```
 
@@ -128,3 +147,33 @@ complete_df %>% filter(hardbounce ==1 | softbounce ==1) %>% group_by(num_dossier
 ```
 
 length(unique(complete_df$num_dossier_mbam_coded))
+
+
+
+
+# LES ID pas actifs
+```{r }
+complete_df$date <- as.Date(complete_df$date)
+
+yo <- complete_df %>% select(c(num_dossier_mbam_coded,date,open)) %>% 
+                    filter(!(num_dossier_mbam_coded %in% c("908d1fd10b357ed0ceaaec823abf81bc",
+                                                          "1b94ef47779439aedbf89a519ccb0ac3"))) %>%     arrange(date)%>% 
+            group_by(num_dossier_mbam_coded) %>% mutate(days_since_last_communication= as.numeric(date- lag(date,1))) 
+  
+yo$days_since_last_communication[is.na(yo$days_since_last_communication)] <- 0
+yo2 <-yo %>% 
+  group_by(num_dossier_mbam_coded) %>% 
+  mutate(Temps_inactivite= cumsum_reset(as.logical(1-open),days_since_last_communication))
+
+
+
+for (eachind in yo2$num_dossier_mbam_coded){
+  for (eachdate in seq(2,length(yo2$date[yo2$num_dossier_mbam_coded==eachind]))){
+    yo2$days_since_active[yo2$num_dossier_mbam_coded ==eachind][eachdate]= 
+            (1-yo2$open[yo2$num_dossier_mbam_coded ==eachind][eachdate])*(yo2$days_since_last_communication[yo2$num_dossier_mbam_coded ==eachind][eachdate]+
+            yo2$days_since_active[yo2$num_dossier_mbam_coded ==eachind][eachdate-1])
+  }
+}
+
+
+```
