@@ -19,6 +19,7 @@ library(gridExtra)
 library(data.table)
 library(hutilscpp)
 library(fastDummies)
+library(tidyr)
 
 
 if (Sys.getenv("USERNAME") =="David"){
@@ -63,8 +64,26 @@ all_int_var= names(complete_df_adj)[!names(complete_df_adj) %in%
 
 testing <- aggregate(.~num_dossier_mbam_coded+date, complete_df_adj %>% select(-first_transaction), any)
 
+
 write.csv(testing,"Curated_complete.csv")
   
+
+hey <- testing[,grep("campagnes_",names(testing))]
+hey$campagned_triggered <- rbinom(p=0.05, n=nrow(hey),size=1)
+
+
+test2 <- hey %>% pivot_longer(starts_with("campagnes_"),
+                              names_to="campagnes",
+                              values_to = "triggered",
+                              names_prefix = "campagnes_") %>% 
+                 group_by(campagnes, triggered) %>% 
+                 summarise(Somme= sum(campagned_triggered)) %>% 
+                 pivot_wider(names_from=triggered,
+                             values_from = Somme,
+                             names_prefix= "triggered_") %>% mutate("effective_%" = round(triggered_TRUE/(triggered_TRUE+triggered_FALSE),4)*100 )
+
+
+
 
 ```
 
