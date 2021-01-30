@@ -57,7 +57,6 @@ all_int_var= names(complete_df_adj)[!names(complete_df_adj) %in%
 
 #testing <- aggregate(.~num_dossier_mbam_coded+date, complete_df_adj %>% select(-first_transaction), any)
 
-
 #write.csv(testing,"Curated_complete.csv")
   
 
@@ -66,101 +65,10 @@ all_int_var= names(complete_df_adj)[!names(complete_df_adj) %in%
 
 ```{r}
 testing <- read.csv("/Users/sarahdupuis/Documents/HEC/DataChallenge/MBAM_data/Curated_complete.csv", header = TRUE, row.names = 1, stringsAsFactor=FALSE)
-hey <- testing[,grep("campagnes_",names(testing))]
-hey$campagned_triggered <- rbinom(p=0.05, n=nrow(hey),size=1)
 
-
-test2 <- hey %>% pivot_longer(starts_with("campagnes_"),
-                              names_to="campagnes",
-                              values_to = "triggered",
-                              names_prefix = "campagnes_") %>%
-                 group_by(campagnes, triggered) %>%
-                 summarise(Somme= sum(campagned_triggered)) %>%
-                 pivot_wider(names_from=triggered,
-                             values_from = Somme,
-                             names_prefix= "triggered_") %>% mutate("effective_%" = round(triggered_TRUE/(triggered_TRUE+triggered_FALSE),4)*100 )
-# 
 ```
 
-```{r}
-data_date_delivered= complete_df  %>%
-        select(c(date,num_dossier_mbam_coded,statut,langue, delivered, open, clicked, not_open,open_but_didnt_click,campagnes)) %>% filter(delivered ==1) %>%
-                                            group_by(date) %>% 
-                                            summarise(count_date= n(),
-                                                      Open= sum(open),
-                                                      Clicked= sum(clicked),
-                                                      Not_open= sum(not_open),
-                                                      Open_not_click= sum(open_but_didnt_click)) %>% mutate(Pct_open = Open/count_date)
 
-data_open_or_not = melt(data_date_delivered %>% select(date, Open, Not_open,Pct_open) ,id.vars = "date")
-
-
-color_table_1= tibble(open_or_not= c("Open","Not_open"),
-                    color=c("green","red"))
-
-g1 <- ggplot(data= data_open_or_not %>% filter(variable!="Pct_open"))+
-  geom_col(mapping = aes(x=date,y=value,fill=variable),position="stack") +
-  scale_fill_manual(values=color_table_1$color)+
-  ggtitle("Les courriels sont-ils ouvert?")+ylab("# courriel envoy?s")+ xlab("Date")+
-  theme(legend.position = "right",legend.title = element_blank(),
-        axis.title.x = element_blank(), axis.text.x = element_blank())
-
-g2 <- ggplot(data= data_open_or_not %>% filter(variable=="Pct_open"))+
-  geom_col(mapping = aes(x=date,y=value,fill=variable),position="stack") +
-  scale_fill_manual(values=color_table_1$color)+
-  ylab(" % courriel ouvert")+ xlab("Date")+
-  theme(legend.position = "right",legend.title = element_blank())
-
-
-g3 <- grid.arrange(g1,g2,ncol=1)
-
-
-
-
-###
-data_date_delivered$Open_clicked_pct = data_date_delivered$Clicked / data_date_delivered$Open
-
-
-ggplot(data= data_date_delivered)+
-  geom_col(mapping = aes(x=date,y=Open_clicked_pct),fill="green") +
-  ylab("% des courriels ouvert")+ xlab("Date")+ ggtitle("?a clique ou ?a ne clique pas?")
-
-######
-
-data_date_delivered_campagnes= complete_df %>% 
-        select(c(date,num_dossier_mbam_coded,statut,langue, delivered, open, clicked, not_open,open_but_didnt_click,campagnes)) %>% filter(delivered ==1) %>%
-                                            group_by(date,campagnes) %>% 
-                                            summarise(count_date= n(),
-                                                      Open= sum(open),
-                                                      Clicked= sum(clicked),
-                                                      Not_open= sum(not_open),
-                                                      Open_not_click= sum(open_but_didnt_click)) 
-
-data_open_or_not_with_campaign = melt(data_date_delivered_campagnes %>% select(date, Open, Not_open,campagnes) ,id.vars = c("date","campagnes"))
-
-
-count_campaigne <- data_open_or_not_with_campaign %>% filter(variable=="Open") %>% group_by(campagnes) %>% summarise(count_campagnes= n())
-data_open_or_not_with_campaign <- data_open_or_not_with_campaign %>% merge(count_campaigne)
-
-data_open_or_not_with_campaign$campagnes <- gsub("EblastPromoParis_","",data_open_or_not_with_campaign$campagnes)
-
-
-ggplot(data= data_open_or_not_with_campaign %>% filter(count_campagnes>1))+
-  geom_col(mapping = aes(x=date,y=value,fill=variable),position="stack") +
-  scale_fill_manual(values=color_table_1$color)+
-  ggtitle("Ouvert ou non par campagne")+ylab("Nombre de communication envoy?s")+ xlab("Date")+
-  theme(legend.position = "None")+facet_wrap(campagnes~.,scales="free",ncol = 4,labeller = label_wrap_gen(width=20))+
-  theme(axis.text.x = element_text(angle=45))+
-  theme(strip.text.x = element_text(size = 10, colour = "black"))
-
-
-ggplot(data= data_open_or_not_with_campaign %>% filter(count_campagnes==1),group=color)+
-  geom_col(mapping = aes(x=date,y=value,fill=variable,color=campagnes)) +
-  scale_fill_manual(values=color_table_1$color)+
-  ggtitle("Ouvert ou non par campagne")+ylab("Nombre de communication envoy?s")+ xlab("Date")+
-  theme(axis.text.x = element_text(angle=45),axis.title.x = element_blank())+
-  theme(strip.text.x = element_text(size = 7, colour = "black")) 
-```
 
 Analyse des data
 Les probleme de courriels
@@ -180,59 +88,59 @@ length(unique(complete_df$num_dossier_mbam_coded))
 
 # LES ID pas actifs
 ```{r }
-complete_df_adj <- 
-
-yo <- complete_df %>% 
-        select(c(num_dossier_mbam_coded,date,open,statut,converted)) %>% 
-        filter(!(num_dossier_mbam_coded %in% c("908d1fd10b357ed0ceaaec823abf81bc",
-                                              "1b94ef47779439aedbf89a519ccb0ac3"))) %>%     
-        arrange(date)%>% 
-        group_by(num_dossier_mbam_coded) %>% 
-                mutate(days_since_last_communication= as.numeric(date- lag(date,1)),
-                       REGIME_CHANGE ="NEUTRAL") %>% 
-                mutate(REGIME_CHANGE= case_when(
-                            ((statut=="ACTIFS") & (lag(statut,1)=="INACTIFS"))~"IN",
-                            ((statut=="INACTIFS") & (lag(statut,1)=="ACTIFS"))~"OUT",
-                              TRUE~REGIME_CHANGE))
-
-
-yo$days_since_last_communication[is.na(yo$days_since_last_communication)] <- 0
-yo<-yo %>% 
-  group_by(num_dossier_mbam_coded) %>% 
-  mutate(Temps_entre_open= cumsum_reset(as.logical(1-open),days_since_last_communication)) %>% 
-  mutate(one1=1)%>%
-  mutate(nb_courriel_until_converted= cumsum_reset(as.logical(1-converted),one1))
-
-
-mean_communication_id= yo %>% group_by(num_dossier_mbam_coded) %>% 
-                                              summarise(mean_temps=mean(days_since_last_communication),
-                                               max_temps= max(days_since_last_communication)
-                                               )
-
-melt_mean= melt(mean_communication_id)
-
-ggplot(data= melt_mean) + 
-  geom_density(mapping=aes(x=value,fill=variable),alpha=0.5)+ ggtitle("Distribution des temps moyens et maximum\nentre les communication avec les clients")
-
-
-mean_communication_id_date= yo %>% group_by(num_dossier_mbam_coded,date) %>% summarise(mean_temps=mean(days_since_last_communication),
-                                                                             max_temps= max(days_since_last_communication))
-
-ggplot(data=mean_communication_id_date)+
-  geom_point(mapping=aes(x=date,y=max_temps),alpha=0.2)
-
-mean_open_id= yo %>% group_by(num_dossier_mbam_coded) %>% mutate(come_back = -Temps_entre_open+ lag(Temps_entre_open,1)) %>% 
-                                                          mutate(come_back=case_when(is.na(come_back)~0,
-                                                                                     TRUE~come_back)) %>% 
-                                                          summarise(mean_open=mean(Temps_entre_open), 
-                                                                    max_open=max(Temps_entre_open),
-                                                                    max_comeback= max(come_back,na.rm = TRUE))
-
-melt_mean_open= melt(mean_open_id)
-
-ggplot(data= melt_mean_open) + 
-  geom_density(mapping=aes(x=value,fill=variable),alpha=0.5)+ ggtitle("Distribution des temps\nentre les ouverture des mail par les clients")+
-  facet_grid(variable~.)+ theme(legend.position = "none")
+# complete_df_adj <- 
+# 
+# yo <- complete_df %>% 
+#         select(c(num_dossier_mbam_coded,date,open,statut,converted)) %>% 
+#         filter(!(num_dossier_mbam_coded %in% c("908d1fd10b357ed0ceaaec823abf81bc",
+#                                               "1b94ef47779439aedbf89a519ccb0ac3"))) %>%     
+#         arrange(date)%>% 
+#         group_by(num_dossier_mbam_coded) %>% 
+#                 mutate(days_since_last_communication= as.numeric(date- lag(date,1)),
+#                        REGIME_CHANGE ="NEUTRAL") %>% 
+#                 mutate(REGIME_CHANGE= case_when(
+#                             ((statut=="ACTIFS") & (lag(statut,1)=="INACTIFS"))~"IN",
+#                             ((statut=="INACTIFS") & (lag(statut,1)=="ACTIFS"))~"OUT",
+#                               TRUE~REGIME_CHANGE))
+# 
+# 
+# yo$days_since_last_communication[is.na(yo$days_since_last_communication)] <- 0
+# yo<-yo %>% 
+#   group_by(num_dossier_mbam_coded) %>% 
+#   mutate(Temps_entre_open= cumsum_reset(as.logical(1-open),days_since_last_communication)) %>% 
+#   mutate(one1=1)%>%
+#   mutate(nb_courriel_until_converted= cumsum_reset(as.logical(1-converted),one1))
+# 
+# 
+# mean_communication_id= yo %>% group_by(num_dossier_mbam_coded) %>% 
+#                                               summarise(mean_temps=mean(days_since_last_communication),
+#                                                max_temps= max(days_since_last_communication)
+#                                                )
+# 
+# melt_mean= melt(mean_communication_id)
+# 
+# ggplot(data= melt_mean) + 
+#   geom_density(mapping=aes(x=value,fill=variable),alpha=0.5)+ ggtitle("Distribution des temps moyens et maximum\nentre les communication avec les clients")
+# 
+# 
+# mean_communication_id_date= yo %>% group_by(num_dossier_mbam_coded,date) %>% summarise(mean_temps=mean(days_since_last_communication),
+#                                                                              max_temps= max(days_since_last_communication))
+# 
+# ggplot(data=mean_communication_id_date)+
+#   geom_point(mapping=aes(x=date,y=max_temps),alpha=0.2)
+# 
+# mean_open_id= yo %>% group_by(num_dossier_mbam_coded) %>% mutate(come_back = -Temps_entre_open+ lag(Temps_entre_open,1)) %>% 
+#                                                           mutate(come_back=case_when(is.na(come_back)~0,
+#                                                                                      TRUE~come_back)) %>% 
+#                                                           summarise(mean_open=mean(Temps_entre_open), 
+#                                                                     max_open=max(Temps_entre_open),
+#                                                                     max_comeback= max(come_back,na.rm = TRUE))
+# 
+# melt_mean_open= melt(mean_open_id)
+# 
+# ggplot(data= melt_mean_open) + 
+#   geom_density(mapping=aes(x=value,fill=variable),alpha=0.5)+ ggtitle("Distribution des temps\nentre les ouverture des mail par les clients")+
+#   facet_grid(variable~.)+ theme(legend.position = "none")
 
 
 ```
@@ -341,6 +249,192 @@ testing2 <- testing2 %>%
 
 ```
 
+```{r}
+#Add a variable that indicates the number of email
+testing2 <- testing2 %>%
+  arrange(num_dossier_mbam_coded, date) %>%
+  group_by(num_dossier_mbam_coded) %>%
+  mutate(emailnum = 1:n())
+```
+
+```{r}
+type_promo <- read_excel("Dictionnaire_MBAM.xlsx",sheet = "Type de promotion",col_names = TRUE)
+```
+```{r}
+
+vars_promo <- c("code.promo", "1_2ans", "Type_promo", "Qte_promo1", "Qte_promo2","Detail_promo")
+
+testing2 <- testing2 %>%
+  mutate(code.promo=case_when(is.na(as.character(code.promo))==TRUE~"no_promo", TRUE~as.character(code.promo))) %>%
+  merge(type_promo[vars_promo], by="code.promo") %>% distinct()
+
+
+```
+
+```{r }
+yo <- testing2 %>%
+        select(c(num_dossier_mbam_coded,date,open,last)) %>%
+        arrange(date)%>%
+        group_by(num_dossier_mbam_coded) %>%
+                mutate(days_since_last_communication= as.numeric(date- lag(date,1)))
+                
+
+
+yo$days_since_last_communication[is.na(yo$days_since_last_communication)] <- 0
+yo<-yo %>%
+  group_by(num_dossier_mbam_coded) %>%
+  mutate(Temps_entre_open= cumsum_reset(as.logical(1-open),days_since_last_communication)) %>%
+  mutate(one1=1)%>%
+  mutate(nb_courriel_until_converted= cumsum_reset(as.logical(1-last),one1))
+
+
+mean_communication_id= yo %>% group_by(num_dossier_mbam_coded) %>%
+                                              summarise(mean_temps=mean(days_since_last_communication),
+                                               max_temps= max(days_since_last_communication)
+                                               )
+
+melt_mean= melt(mean_communication_id)
+
+ggplot(data= melt_mean) +
+  geom_density(mapping=aes(x=value,fill=variable),alpha=0.5)+ ggtitle("Distribution des temps moyens et maximum\nentre les communication avec les clients")
+
+
+mean_communication_id_date= yo %>% group_by(num_dossier_mbam_coded,date) %>% summarise(mean_temps=mean(days_since_last_communication),
+                                                                             max_temps= max(days_since_last_communication))
+
+ggplot(data=mean_communication_id_date)+
+  geom_point(mapping=aes(x=date,y=max_temps),alpha=0.2)
+
+mean_open_id= yo %>% group_by(num_dossier_mbam_coded) %>% mutate(come_back = -Temps_entre_open+ lag(Temps_entre_open,1)) %>%
+                                                          mutate(come_back=case_when(is.na(come_back)~0,
+                                                                                     TRUE~come_back)) %>%
+                                                          summarise(mean_open=mean(Temps_entre_open),
+                                                                    max_open=max(Temps_entre_open),
+                                                                    max_comeback= max(come_back,na.rm = TRUE))
+
+melt_mean_open= melt(mean_open_id)
+
+ggplot(data= melt_mean_open) +
+  geom_density(mapping=aes(x=value,fill=variable),alpha=0.5)+ ggtitle("Distribution des temps\nentre les ouverture des mail par les clients")+
+  facet_grid(variable~.)+ theme(legend.position = "none")
+
+
+```
+
+```{r}
+#Merge yo to testing2
+testing3 <- testing2 %>%
+                merge(yo %>% select(-c("last","one1","open")), all.x=TRUE, by = c("num_dossier_mbam_coded", "date")) %>% distinct()
+
+```
+
+```{r}
+#Change Quantity promo
+
+testing3$Type_promo <- ifelse(testing3$campagnes_PromoR.ouverture20.==TRUE, "Rabais_pct", testing3$Type_promo)
+testing3$Qte_promo1 <- ifelse(testing3$campagnes_PromoR.ouverture20.==TRUE, 0.2, testing3$Qte_promo1)
+```
+
+
+
+
+
+
+#### ANALYSIS #####
+
+```{r}
+##DAVID##
+
+data_date_delivered= testing2  %>%
+                        filter(delivered ==1) %>%
+                                            group_by(date) %>%
+                                            summarise(count_date= n(),
+                                                      Open= sum(open),
+                                                      Clicked= sum(clicked),
+                                                      Not_open= sum(not_open),
+                                                      Open_not_click= sum(open_but_didnt_click)) %>%   mutate(Pct_open = Open/count_date)
+
+data_open_or_not = melt(data_date_delivered %>% select(date, Open, Not_open,Pct_open) ,id.vars = "date")
+
+
+color_table_1= tibble(open_or_not= c("Open","Not_open"),
+                    color=c("green","red"))
+
+g1 <- ggplot(data= data_open_or_not %>% filter(variable!="Pct_open"))+
+  geom_col(mapping = aes(x=date,y=value,fill=variable),position="stack") +
+  scale_fill_manual(values=color_table_1$color)+
+  ggtitle("Les courriels sont-ils ouvert?")+ylab("# courriel envoy?s")+ xlab("Date")+
+  theme(legend.position = "right",legend.title = element_blank(),
+        axis.title.x = element_blank(), axis.text.x = element_blank())
+
+g2 <- ggplot(data= data_open_or_not %>% filter(variable=="Pct_open"))+
+  geom_col(mapping = aes(x=date,y=value,fill=variable),position="stack") +
+  scale_fill_manual(values=color_table_1$color)+
+  ylab(" % courriel ouvert")+ xlab("Date")+
+  theme(legend.position = "right",legend.title = element_blank())
+
+
+g3 <- grid.arrange(g1,g2,ncol=1)
+
+
+
+
+###
+data_date_delivered$Open_clicked_pct = data_date_delivered$Clicked / data_date_delivered$Open
+
+
+ggplot(data= data_date_delivered)+
+  geom_col(mapping = aes(x=date,y=Open_clicked_pct),fill="green") +
+  ylab("% des courriels ouvert")+ xlab("Date")+ ggtitle("?a clique ou ?a ne clique pas?")
+
+######
+
+data_date_delivered_campagnes= complete_df %>%
+        select(c(date,num_dossier_mbam_coded,statut,langue, delivered, open, clicked, not_open,open_but_didnt_click,campagnes)) %>% filter(delivered ==1) %>%
+                                            group_by(date,campagnes) %>%
+                                            summarise(count_date= n(),
+                                                      Open= sum(open),
+                                                      Clicked= sum(clicked),
+                                                      Not_open= sum(not_open),
+                                                      Open_not_click= sum(open_but_didnt_click))
+
+data_open_or_not_with_campaign = melt(data_date_delivered_campagnes %>% select(date, Open, Not_open,campagnes) ,id.vars = c("date","campagnes"))
+
+
+count_campaigne <- data_open_or_not_with_campaign %>% filter(variable=="Open") %>% group_by(campagnes) %>% summarise(count_campagnes= n())
+data_open_or_not_with_campaign <- data_open_or_not_with_campaign %>% merge(count_campaigne)
+
+data_open_or_not_with_campaign$campagnes <- gsub("EblastPromoParis_","",data_open_or_not_with_campaign$campagnes)
+
+
+ggplot(data= data_open_or_not_with_campaign %>% filter(count_campagnes>1))+
+  geom_col(mapping = aes(x=date,y=value,fill=variable),position="stack") +
+  scale_fill_manual(values=color_table_1$color)+
+  ggtitle("Ouvert ou non par campagne")+ylab("Nombre de communication envoy?s")+ xlab("Date")+
+  theme(legend.position = "None")+facet_wrap(campagnes~.,scales="free",ncol = 4,labeller = label_wrap_gen(width=20))+
+  theme(axis.text.x = element_text(angle=45))+
+  theme(strip.text.x = element_text(size = 10, colour = "black"))
+
+
+ggplot(data= data_open_or_not_with_campaign %>% filter(count_campagnes==1),group=color)+
+  geom_col(mapping = aes(x=date,y=value,fill=variable,color=campagnes)) +
+  scale_fill_manual(values=color_table_1$color)+
+  ggtitle("Ouvert ou non par campagne")+ylab("Nombre de communication envoy?s")+ xlab("Date")+
+  theme(axis.text.x = element_text(angle=45),axis.title.x = element_blank())+
+  theme(strip.text.x = element_text(size = 7, colour = "black"))
+```
+
+
+
+
+
+```{r}
+testing2 %>%
+  filter(last == 1) %>%
+  summarise(avgEmail = mean(emailnum))
+
+```
+
 
 ```{r}
 #Taux de conversion
@@ -369,13 +463,6 @@ test2 <- whatevs %>%
 
 
 ```
-```{r}
-
-```
-
-
-
-
 
 
 
