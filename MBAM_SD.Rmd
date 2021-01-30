@@ -333,8 +333,14 @@ testing3 <- testing2 %>%
 
 testing3$Type_promo <- ifelse(testing3$campagnes_PromoR.ouverture20.==TRUE, "Rabais_pct", testing3$Type_promo)
 testing3$Qte_promo1 <- ifelse(testing3$campagnes_PromoR.ouverture20.==TRUE, 0.2, testing3$Qte_promo1)
+
+#Add day of the week
+testing3$day <- weekdays(testing3$date)
 ```
 
+```{r}
+write.csv(testing3, "FinalData.csv", row.names = FALSE)
+```
 
 
 
