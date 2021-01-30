@@ -1,0 +1,653 @@
+---
+title: "DataChallenge"
+author: "Sarah"
+date: "1/28/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#Import libraries
+knitr::opts_chunk$set(echo = TRUE)
+library(lubridate)
+library(MASS)
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(reshape2)
+library(grid)
+library(gridExtra)
+library(data.table)
+library(hutilscpp)
+library(fastDummies)
+library(tidyr)
+
+Sys.setlocale("LC_ALL", "C")
+```
+
+
+```{r}
+#Load data
+complete_df <- read.csv("/Users/sarahdupuis/Documents/HEC/DataChallenge/MBAM_data/MBAM_complet.csv")
+conversion <- read.csv("/Users/sarahdupuis/Documents/HEC/DataChallenge/MBAM_data/MBAM_convertis.csv")
+```
+
+
+```{r}
+complete_df$date <- date(complete_df$date)
+
+complete_df$campagnes[complete_df$campagnes == "EblastPromoParis-Le Saviez-vous?#1"] <- "EblastPromoParis_LeSaviez-vous?#1"
+complete_df$campagnes [complete_df$campagnes == "EblastPromoParis-LeSaviez-vous?#1"]<- "EblastPromoParis_LeSaviez-vous?#1"
+complete_df$campagnes[complete_df$campagnes == "EblastPromoParis-LeSaviez-vous?#2"] <- "EblastPromoParis_LeSaviez-vous?#2"
+complete_df$campagnes[complete_df$campagnes == "EblastPromoParis-LeSaviez-vous?#3"] <- "EblastPromoParis_LeSaviez-vous?#3"
+complete_df$campagnes[complete_df$campagnes == "EblastPromoParis-LeSaviez-vous?#4"] <- "EblastPromoParis_LeSaviez-vous?#4"
+complete_df$campagnes[complete_df$campagnes == "EblastPromoParisOK"] <- "EblastPromoParis"
+
+complete_df$campagnes <- gsub("#[0-9]","",complete_df$campagnes)
+
+
+complete_df_adj <- complete_df %>% filter(!(num_dossier_mbam_coded %in% c("908d1fd10b357ed0ceaaec823abf81bc", "1b94ef47779439aedbf89a519ccb0ac3"))) %>% 
+                                  select(-c("campaign_name", "inscription", "lettre","campaign_id","date_envoi","hardbounce","softbounce","complaint")) %>% 
+                                  group_by(campagnes, statut,langue) %>%
+                                  dummy_cols(select_columns = c("campagnes", "statut","langue" ))
+
+complete_df_adj <- complete_df_adj %>% ungroup() %>% select(-c("campagnes", "statut","langue")) %>% distinct(.keep_all=TRUE) 
+
+all_int_var= names(complete_df_adj)[!names(complete_df_adj) %in% 
+                                                     c("num_dossier_mbam_coded", "date","first_transaction")]
+
+#testing <- aggregate(.~num_dossier_mbam_coded+date, complete_df_adj %>% select(-first_transaction), any)
+
+
+#write.csv(testing,"Curated_complete.csv")
+  
+
+# 
+```
+
+```{r}
+testing <- read.csv("/Users/sarahdupuis/Documents/HEC/DataChallenge/MBAM_data/Curated_complete.csv", header = TRUE, row.names = 1, stringsAsFactor=FALSE)
+hey <- testing[,grep("campagnes_",names(testing))]
+hey$campagned_triggered <- rbinom(p=0.05, n=nrow(hey),size=1)
+
+
+test2 <- hey %>% pivot_longer(starts_with("campagnes_"),
+                              names_to="campagnes",
+                              values_to = "triggered",
+                              names_prefix = "campagnes_") %>%
+                 group_by(campagnes, triggered) %>%
+                 summarise(Somme= sum(campagned_triggered)) %>%
+                 pivot_wider(names_from=triggered,
+                             values_from = Somme,
+                             names_prefix= "triggered_") %>% mutate("effective_%" = round(triggered_TRUE/(triggered_TRUE+triggered_FALSE),4)*100 )
+# 
+```
+
+```{r}
+data_date_delivered= complete_df  %>%
+        select(c(date,num_dossier_mbam_coded,statut,langue, delivered, open, clicked, not_open,open_but_didnt_click,campagnes)) %>% filter(delivered ==1) %>%
+                                            group_by(date) %>% 
+                                            summarise(count_date= n(),
+                                                      Open= sum(open),
+                                                      Clicked= sum(clicked),
+                                                      Not_open= sum(not_open),
+                                                      Open_not_click= sum(open_but_didnt_click)) %>% mutate(Pct_open = Open/count_date)
+
+data_open_or_not = melt(data_date_delivered %>% select(date, Open, Not_open,Pct_open) ,id.vars = "date")
+
+
+color_table_1= tibble(open_or_not= c("Open","Not_open"),
+                    color=c("green","red"))
+
+g1 <- ggplot(data= data_open_or_not %>% filter(variable!="Pct_open"))+
+  geom_col(mapping = aes(x=date,y=value,fill=variable),position="stack") +
+  scale_fill_manual(values=color_table_1$color)+
+  ggtitle("Les courriels sont-ils ouvert?")+ylab("# courriel envoy?s")+ xlab("Date")+
+  theme(legend.position = "right",legend.title = element_blank(),
+        axis.title.x = element_blank(), axis.text.x = element_blank())
+
+g2 <- ggplot(data= data_open_or_not %>% filter(variable=="Pct_open"))+
+  geom_col(mapping = aes(x=date,y=value,fill=variable),position="stack") +
+  scale_fill_manual(values=color_table_1$color)+
+  ylab(" % courriel ouvert")+ xlab("Date")+
+  theme(legend.position = "right",legend.title = element_blank())
+
+
+g3 <- grid.arrange(g1,g2,ncol=1)
+
+
+
+
+###
+data_date_delivered$Open_clicked_pct = data_date_delivered$Clicked / data_date_delivered$Open
+
+
+ggplot(data= data_date_delivered)+
+  geom_col(mapping = aes(x=date,y=Open_clicked_pct),fill="green") +
+  ylab("% des courriels ouvert")+ xlab("Date")+ ggtitle("?a clique ou ?a ne clique pas?")
+
+######
+
+data_date_delivered_campagnes= complete_df %>% 
+        select(c(date,num_dossier_mbam_coded,statut,langue, delivered, open, clicked, not_open,open_but_didnt_click,campagnes)) %>% filter(delivered ==1) %>%
+                                            group_by(date,campagnes) %>% 
+                                            summarise(count_date= n(),
+                                                      Open= sum(open),
+                                                      Clicked= sum(clicked),
+                                                      Not_open= sum(not_open),
+                                                      Open_not_click= sum(open_but_didnt_click)) 
+
+data_open_or_not_with_campaign = melt(data_date_delivered_campagnes %>% select(date, Open, Not_open,campagnes) ,id.vars = c("date","campagnes"))
+
+
+count_campaigne <- data_open_or_not_with_campaign %>% filter(variable=="Open") %>% group_by(campagnes) %>% summarise(count_campagnes= n())
+data_open_or_not_with_campaign <- data_open_or_not_with_campaign %>% merge(count_campaigne)
+
+data_open_or_not_with_campaign$campagnes <- gsub("EblastPromoParis_","",data_open_or_not_with_campaign$campagnes)
+
+
+ggplot(data= data_open_or_not_with_campaign %>% filter(count_campagnes>1))+
+  geom_col(mapping = aes(x=date,y=value,fill=variable),position="stack") +
+  scale_fill_manual(values=color_table_1$color)+
+  ggtitle("Ouvert ou non par campagne")+ylab("Nombre de communication envoy?s")+ xlab("Date")+
+  theme(legend.position = "None")+facet_wrap(campagnes~.,scales="free",ncol = 4,labeller = label_wrap_gen(width=20))+
+  theme(axis.text.x = element_text(angle=45))+
+  theme(strip.text.x = element_text(size = 10, colour = "black"))
+
+
+ggplot(data= data_open_or_not_with_campaign %>% filter(count_campagnes==1),group=color)+
+  geom_col(mapping = aes(x=date,y=value,fill=variable,color=campagnes)) +
+  scale_fill_manual(values=color_table_1$color)+
+  ggtitle("Ouvert ou non par campagne")+ylab("Nombre de communication envoy?s")+ xlab("Date")+
+  theme(axis.text.x = element_text(angle=45),axis.title.x = element_blank())+
+  theme(strip.text.x = element_text(size = 7, colour = "black")) 
+```
+
+Analyse des data
+Les probleme de courriels
+```{r }
+#Les hardbounce
+ggplot(data=complete_df %>% filter(hardbounce ==1 | softbounce ==1))
+
+complete_df %>% filter(hardbounce ==1 | softbounce ==1) %>% group_by(num_dossier_mbam_coded) %>% summarise()
+
+
+```
+
+length(unique(complete_df$num_dossier_mbam_coded))
+
+
+
+
+# LES ID pas actifs
+```{r }
+complete_df_adj <- 
+
+yo <- complete_df %>% 
+        select(c(num_dossier_mbam_coded,date,open,statut,converted)) %>% 
+        filter(!(num_dossier_mbam_coded %in% c("908d1fd10b357ed0ceaaec823abf81bc",
+                                              "1b94ef47779439aedbf89a519ccb0ac3"))) %>%     
+        arrange(date)%>% 
+        group_by(num_dossier_mbam_coded) %>% 
+                mutate(days_since_last_communication= as.numeric(date- lag(date,1)),
+                       REGIME_CHANGE ="NEUTRAL") %>% 
+                mutate(REGIME_CHANGE= case_when(
+                            ((statut=="ACTIFS") & (lag(statut,1)=="INACTIFS"))~"IN",
+                            ((statut=="INACTIFS") & (lag(statut,1)=="ACTIFS"))~"OUT",
+                              TRUE~REGIME_CHANGE))
+
+
+yo$days_since_last_communication[is.na(yo$days_since_last_communication)] <- 0
+yo<-yo %>% 
+  group_by(num_dossier_mbam_coded) %>% 
+  mutate(Temps_entre_open= cumsum_reset(as.logical(1-open),days_since_last_communication)) %>% 
+  mutate(one1=1)%>%
+  mutate(nb_courriel_until_converted= cumsum_reset(as.logical(1-converted),one1))
+
+
+mean_communication_id= yo %>% group_by(num_dossier_mbam_coded) %>% 
+                                              summarise(mean_temps=mean(days_since_last_communication),
+                                               max_temps= max(days_since_last_communication)
+                                               )
+
+melt_mean= melt(mean_communication_id)
+
+ggplot(data= melt_mean) + 
+  geom_density(mapping=aes(x=value,fill=variable),alpha=0.5)+ ggtitle("Distribution des temps moyens et maximum\nentre les communication avec les clients")
+
+
+mean_communication_id_date= yo %>% group_by(num_dossier_mbam_coded,date) %>% summarise(mean_temps=mean(days_since_last_communication),
+                                                                             max_temps= max(days_since_last_communication))
+
+ggplot(data=mean_communication_id_date)+
+  geom_point(mapping=aes(x=date,y=max_temps),alpha=0.2)
+
+mean_open_id= yo %>% group_by(num_dossier_mbam_coded) %>% mutate(come_back = -Temps_entre_open+ lag(Temps_entre_open,1)) %>% 
+                                                          mutate(come_back=case_when(is.na(come_back)~0,
+                                                                                     TRUE~come_back)) %>% 
+                                                          summarise(mean_open=mean(Temps_entre_open), 
+                                                                    max_open=max(Temps_entre_open),
+                                                                    max_comeback= max(come_back,na.rm = TRUE))
+
+melt_mean_open= melt(mean_open_id)
+
+ggplot(data= melt_mean_open) + 
+  geom_density(mapping=aes(x=value,fill=variable),alpha=0.5)+ ggtitle("Distribution des temps\nentre les ouverture des mail par les clients")+
+  facet_grid(variable~.)+ theme(legend.position = "none")
+
+
+```
+
+
+
+
+```{r }
+test <- complete_df %>% 
+  group_by(num_dossier_mbam_coded, date) %>% 
+  summarise(statut_day_count=n()) %>% filter(statut_day_count>1) 
+
+
+
+```
+
+
+```{r}
+#Ajout de first_transaction a testing
+vars <- c("num_dossier_mbam_coded","first_transaction")
+testing2 <- testing %>%
+              merge(
+                complete_df[vars] %>% distinct(), by="num_dossier_mbam_coded")
+```
+
+```{r}
+#Creation of variable last
+testing2$first_transaction <- as.Date(testing2$first_transaction, "%Y-%m-%d")
+testing2$date <- as.Date(testing2$date, "%Y-%m-%d")
+
+testing2$date_diff <- testing2$first_transaction - testing2$date
+testing2$date_diff <- ifelse(testing2$date_diff < 0, 999999, testing2$date_diff)
+
+testing2 <- testing2 %>%
+  group_by(num_dossier_mbam_coded) %>%
+  mutate(min = min(date_diff)) %>%
+  mutate(last = ifelse(date_diff == min, 1,0))
+
+testing2$last <- ifelse(is.na(testing2$last) , 0 , 
+                        ifelse(testing2$min==999999, 0, 
+                               ifelse(testing2$last==0, 0, 1)))
+sum(testing2$last)
+
+
+```
+
+```{r}
+#Format conversion transaction date
+conversion$date.transaction <- as.Date(conversion$date.transaction, "%d/%m/%Y %H:%M:%S")
+
+#Determine duplicates in conversion data
+conversion <- conversion %>%
+  add_count(num_dossier_mbam_coded)
+
+table(conversion$n)
+
+conversion_clean <- conversion %>%
+                       merge(
+                          testing2[vars] %>% distinct(), all.x=TRUE, by="num_dossier_mbam_coded")
+
+```
+
+```{r}
+#Remove duplicates from conversion
+conversion_clean$datecheck <- ifelse(conversion_clean$first_transaction == conversion_clean$date.transaction, TRUE, FALSE)
+
+conversion_clean$diff <- conversion_clean$first_transaction - conversion_clean$date.transaction
+table(conversion_clean$datecheck)
+
+conversion_clean %>%
+  filter(datecheck==FALSE & n==2)
+```
+```{r}
+#Remove duplicates that don't match transaction date
+conversion_clean <- unique(conversion_clean)
+conversion_clean <- conversion_clean[!(conversion_clean$n == 2 & conversion_clean$datecheck == FALSE),]
+conversion_clean <- conversion_clean[!(is.na(conversion_clean$num_dossier_mbam_coded)),]
+conversion_clean$n <- NULL
+conversion_clean$nn <- NULL
+
+conversion_clean = conversion_clean %>%
+  add_count(num_dossier_mbam_coded)
+
+conversion_clean %>%
+  filter(n > 1)
+```
+```{r}
+#Remove "Appel entrants" and n=2
+conversion_clean <- conversion_clean[!(conversion_clean$n == 2 & conversion_clean$point.de.vente=="Appels entrants"),]
+
+conversion_clean$n <- NULL
+
+conversion_clean <- conversion_clean %>%
+                      add_count(num_dossier_mbam_coded)
+
+table(conversion_clean$n)
+```
+
+
+```{r}
+#Link point of sale and promo code
+testing2 <- testing2 %>%
+              merge(
+                conversion_clean, all.x = TRUE, all.y = FALSE, by="num_dossier_mbam_coded")
+
+
+```
+
+
+```{r}
+#Taux de conversion
+hey <- testing2[,grep("campagnes_",names(testing2))]
+hey$campagned_triggered <- testing2$last
+hey$open <- testing2$open
+
+whatevs <- hey %>% pivot_longer(starts_with("campagnes_"),
+                              names_to="campagnes",
+                              values_to = "triggered",
+                              names_prefix = "campagnes_")
+
+test2 <- whatevs %>%
+                 group_by(campagnes, triggered) %>%
+                 summarise(Somme= sum(campagned_triggered)) %>%
+                 pivot_wider(names_from=triggered,
+                             values_from = Somme,
+                             names_prefix= "triggered_") %>% 
+  merge(whatevs %>%
+          filter(triggered == TRUE) %>%
+          group_by(campagnes) %>%
+          summarise(openSum = sum(open, na.rm=TRUE))) %>%
+  mutate("effectiveopen_%" = round(triggered_TRUE/openSum,4)*100 ) %>%
+  select(-triggered_FALSE)
+
+
+
+```
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#CODE SARAH
+```{r}
+#Data summary
+summary(complete)
+summary(conversion)
+```
+
+```{r}
+#Change variable format
+complete$campaign_id <- as.factor(complete$campaign_id)
+complete$statut <- as.factor(complete$statut)
+complete$inscription <- as.factor(complete$inscription)
+complete$langue <- as.factor(complete$langue)
+complete$date_envoi <- as.Date(complete$date_envoi)
+complete$first_transaction <- as.Date(complete$first_transaction, "%Y-%m-%d")
+
+conversion$code.promo <- as.factor(conversion$code.promo)
+conversion$point.de.vente <- as.factor(conversion$point.de.vente)
+conversion$date.transaction <- as.Date(conversion$date.transaction, "%m/%d/%Y")
+
+```
+
+```{r}
+#Check validity of clicks
+sum(complete$open)
+sum(complete$open_but_didnt_click) + sum(complete$clicked)
+```
+
+
+```{r}
+#Number of unique IDs complete
+length(unique(complete$num_dossier_mbam_coded))
+
+#Number of unique converted IDs 
+length(unique(conversion$num_dossier_mbam_coded))
+#There are duplicates in the conversion file
+
+conversion %>%
+  group_by(num_dossier_mbam_coded) %>%
+  filter(n()>1) %>%
+  arrange(num_dossier_mbam_coded)
+  
+```
+
+```{r}
+#Add count of the emails sent to an individual
+complete <- complete %>%
+  add_count(num_dossier_mbam_coded)
+```
+
+```{r}
+#Add a variable that indicates the number of email
+complete <- complete %>%
+  arrange(num_dossier_mbam_coded, date_envoi) %>%
+  group_by(num_dossier_mbam_coded) %>%
+  mutate(emailnum = 1:n())
+  
+```
+
+```{r}
+summary(complete$emailnum)
+table(complete$n)
+
+
+complete %>%
+  filter(n == 195141)
+complete %>%
+  filter(n == 11415)
+
+```
+
+
+```{r}
+#Relation between statut and converted
+table(complete$statut, complete$converted)
+table(complete$campagnes, complete$converted)
+
+complete$campagnes[complete$campagnes == "EblastPromoParis-Le Saviez-vous?#1"] <- "EblastPromoParis_LeSaviez-vous?#1"
+complete$campagnes [complete$campagnes == "EblastPromoParis-LeSaviez-vous?#1"]<- "EblastPromoParis_LeSaviez-vous?#1"
+complete$campagnes[complete$campagnes == "EblastPromoParis-LeSaviez-vous?#2"] <- "EblastPromoParis_LeSaviez-vous?#2"
+complete$campagnes[complete$campagnes == "EblastPromoParis-LeSaviez-vous?#3"] <- "EblastPromoParis_LeSaviez-vous?#3"
+complete$campagnes[complete$campagnes == "EblastPromoParis-LeSaviez-vous?#4"] <- "EblastPromoParis_LeSaviez-vous?#4"
+complete$campagnes[complete$campagnes == "EblastPromoParisOK"] <- "EblastPromoParis"
+
+table(complete$campagnes, complete$converted)
+
+```
+
+```{r}
+table(complete$statut, complete$inscription)
+```
+
+```{r}
+complete %>%
+  filter(converted == 1) %>%
+  arrange(num_dossier_mbam_coded, date_envoi)
+```
+```{r}
+complete %>%
+  filter(converted == 1) %>%
+  summarise(count = n_distinct(num_dossier_mbam_coded))
+  
+```
+
+```{r}
+#Check the link between the two files for a random ID
+complete %>%
+  filter(converted == 1)
+
+conversion %>%
+  filter(num_dossier_mbam_coded == "0013205fb4a480640c3d556e2aa2347e")
+complete %>%
+  filter(num_dossier_mbam_coded == "0013205fb4a480640c3d556e2aa2347e")
+
+
+conversion %>%
+  filter(num_dossier_mbam_coded == "004d3bcaad3605acb95fb0c3b36ca6db")
+complete %>%
+  filter(num_dossier_mbam_coded == "004d3bcaad3605acb95fb0c3b36ca6db")  
+
+```
+
+```{r}
+complete <- complete %>%
+  arrange(num_dossier_mbam_coded, date_envoi) %>%
+  group_by(num_dossier_mbam_coded) %>%
+  mutate(check = sum(converted))
+```
+
+```{r}
+# summary(complete$check)
+# 
+# complete %>%
+#   filter(check > 0 & check < n)
+# 
+# 
+# complete %>%
+#   filter(date_envoi== "2020-09-10")
+
+table(conversion$point.de.vente)
+
+```
+
+```{r}
+#Add last campaign before transaction
+complete$date_diff <- complete$first_transaction - complete$date_envoi
+complete$date_diff <- ifelse(complete$date_diff < 0, 999999, complete$date_diff)
+
+complete <- complete %>%
+  group_by(num_dossier_mbam_coded) %>%
+  mutate(min = min(date_diff)) %>%
+  mutate(last = ifelse(date_diff == min, 1,0))
+
+
+```
+
+```{r}
+complete$last <- ifelse(is.na(complete$last) , 0 , 
+                        ifelse(complete$min==999999, 0, 
+                               ifelse(complete$last==0, 0, 1)))
+sum(complete$last)
+
+complete %>%
+  filter(converted==1)
+```
+
+```{r}
+#Conversion rate per campagn
+complete %>%
+  select(campagnes, last) %>%
+  filter(last==1) %>%
+  group_by(campagnes) %>%
+  summarise(n = n())
+
+complete %>%
+  select(campagnes, last) %>%
+  group_by(campagnes) %>%
+  summarize(n = n())
+
+complete %>%
+  select(campagnes, last, open) %>%
+  group_by(campagnes) %>%
+  summarize(prop = sum(last) / sum(open))
+  
+```
+
+
+```{r}
+#Validation of campaign
+vars = c("num_dossier_mbam_coded", "last", "campagnes", "statut")
+valid <- inner_join(conversion, complete[vars], by = "num_dossier_mbam_coded")
+
+valid <- valid %>%
+  filter(last == 1)
+
+```
+
+```{r}
+#Determine duplicates
+valid <- valid %>%
+  add_count(num_dossier_mbam_coded)
+```
+
+```{r}
+#Understand duplicates
+table(valid$n)
+
+valid %>%
+  filter(n > 1) %>%
+  arrange(num_dossier_mbam_coded)
+```
+
+```{r}
+table(valid$code.promo, valid$campagnes)
+```
+
+```{r}
+#Determine duplicates from conversion data
+conversion <- conversion %>%
+  add_count(num_dossier_mbam_coded)
+
+```
+
+```{r}
+table(conversion$n)
+
+conversion %>%
+  filter(n > 1) %>%
+  arrange(num_dossier_mbam_coded)
+```
+```{r}
+table(valid$point.de.vente)
+```
+
+```{r}
+#Join complete and conversion together
+
+allcomp <- left_join(complete, conversion, by="num_dossier_mbam_coded")
+allcomp$n.y <- NULL
+
+```
+
+```{r}
+table(allcomp$point.de.vente)
+
+allcomp %>%
+  filter(converted==0 & is.na(point.de.vente)==FALSE)
+
+#All the values from the conversion table are also marked as converted = 1 in the complete data
+```
+```{r}
+#Determine the duplicates in the all comp data
+allcomp %>%
+  add_count(num_dossier_mbam_coded)
+
+```
+
+
+
